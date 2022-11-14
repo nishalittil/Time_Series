@@ -1,0 +1,573 @@
+---
+title: "CW2_v1"
+author: "Nisha Mundanthara Suresh Babu"
+date: "15/02/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+#install.packages('fpp2', dependencies = TRUE)
+#install.packages(("Rtools"))
+#install.packages("TSA")
+library(magrittr)
+library(forecast)
+library(fpp2)
+library(tseries)
+library(readr)
+library(ggplot2)
+library(TSA)
+
+```
+## ARMA
+#Weekly fuel prices in Italy
+
+```{r}
+#read data
+fuel_data <- read_csv("fuel.csv")
+head(fuel_data)
+```
+
+```{r}
+summary(fuel_data)
+boxplot(fuel_data$CHANGE)
+print(fuel_data)
+plot(fuel_data$PRICE)
+```
+
+
+
+
+```{r}
+sum(is.na(fuel_data))
+frequency(fuel_data)
+
+```
+
+
+
+# create time series
+
+```{r}
+ts(fuel_data$CHANGE,start = c(2005), freq=52) -> fuel_ts
+class(fuel_ts)
+boxplot(fuel_ts)
+```
+```{r}
+tsoutliers(fuel_ts,lambda = "auto")
+boxplot(fuel_ts)
+
+```
+
+```{r}
+#basic plots
+plot(fuel_ts,ylab="Price Change",main="Weekly fuel price change in Italy")
+abline(reg=lm(fuel_ts~time(fuel_ts))) # fit a trend line
+plot(decompose(fuel_ts, type="additive"))
+#cycle(fuel_ts)
+#boxplot(fuel_ts~cycle(fuel_ts),main='fuel price change in weeks')
+```
+
+
+
+
+```{r}
+# test for stationary
+acf(fuel_ts)
+adf.test(fuel_ts)
+kpss.test(fuel_ts)
+```
+
+```{r}
+#model identification
+acf(fuel_ts,lag=24)
+pacf(fuel_ts,lag=24)
+eacf(fuel_ts)
+```
+
+
+```{r}
+# MODEL FITTING
+MAOP <- arima(fuel_ts, order = c(0,0,3), method = 'ML')
+MAOP
+AROP<- arima(fuel_ts, order = c(3,0,0), method = 'ML')
+AROP
+ARMAOP1 <- arima(fuel_ts, order = c(1,0,1), method = 'ML')
+ARMAOP1
+ARMAOP2 <- arima(fuel_ts, order = c(3,0,3), method = 'ML')
+ARMAOP2
+BIC(MAOP)
+BIC(AROP)
+BIC(ARMAOP1)
+BIC(ARMAOP2)
+```
+```{r}
+#residual analysis
+checkresiduals(ARMAOP1)
+#checkresiduals(AR1)
+#checkresiduals(MA1)
+```
+
+```{r}
+#REsidual Analysis
+Box.test(residuals(ARMAOP1))
+Box.test(residuals(ARMAOP1), lag=22, type=c("Ljung"))
+adf.test(residuals(ARMAOP1))
+```
+
+```{r}
+#Residual Analysis
+qqnorm(residuals(ARMAOP1)); qqline(residuals(ARMAOP1))
+shapiro.test(rstandard(ARMAOP1))
+ks.test(rstandard(ARMAOP1),pnorm)
+```
+
+
+```{r}
+#Overfitting
+ma_over<-arima(fuel_ts,order=c(2,0,1))
+ma_over
+ma_over1<-arima(fuel_ts,order=c(1,0,2))
+ma_over1
+```
+
+
+```{r}
+#forecast and forecast limits of co2 model
+plot(ARMAOP2,n.ahead=52,type='o',xlab='Time', ylab='Price Change', main='Price change Forecasting')
+abline(h=coef(ARMAOP1)[names(coef(ARMAOP1))=='intercept'])
+
+#long term forecast for the co2 model
+#plot(m1.co2,n1=c(2004,1),n.ahead=48,xlab='Year',type='b', ylab='CO2 Levels')
+```
+
+
+```{r}
+#predict ARIMA ACCURACY CHECKING
+#futurVal <- predict(m1.co2,n.ahead = 24)
+
+
+# train and test data
+
+trainrsi <-window(fuel_ts,end=2017,52)
+trainrsi
+testrsi <- window(fuel_ts,start=2018)
+testrsi
+model1_fuel<-arima(trainrsi,order=c(1,0,1))
+model2_fuel<-arima(trainrsi,order=c(3,0,0))
+model3_fuel<-arima(trainrsi,order=c(0,0,3))
+model4_fuel<-arima(trainrsi,order=c(3,0,3))
+
+# predict.Arima: Forecast from ARIMA fits
+futurm1 <- predict(model1_fuel,n.ahead = 148) 
+#futurm1
+futurm2 <- predict(model2_fuel,n.ahead = 148) 
+#futurm2
+futurm3 <- predict(model3_fuel,n.ahead = 148) 
+#futurm3
+futurm4 <- predict(model4_fuel,n.ahead = 148) 
+futurm4
+accuracy(futurm1$pred, testrsi)
+accuracy(futurm2$pred, testrsi)
+accuracy(futurm3$pred, testrsi)
+accuracy(futurm4$pred, testrsi)
+```
+
+```{r}
+plot(window(fuel_ts,start=2015,type='l',xlab='Time', ylab='Heavy fuel price change',main='Heavy fuel price change with Forecasted values for the year 2021' ))
+lines(futurm4$pred,col='blue') 
+lines(futurm4$pred+2*futurm4$se,col='orange') 
+lines(futurm4$pred-2*futurm4$se,col='orange') 
+
+plot(window(fuel_ts,start=2015,type='l',xlab='Time', ylab='Heavy fuel price change',main='Heavy fuel price change with Forecasted values for the year 2021' ))
+lines(futurm1$pred,col='blue') 
+lines(futurm1$pred+2*futurm4$se,col='orange') 
+lines(futurm1$pred-2*futurm4$se,col='orange') 
+```
+
+ARIMA
+
+#Retail Sales Index (RSI) values of the UK retail sector excluding fuel
+
+```{r}
+rsi_data <- read_csv("arima.csv")
+head(rsi_data)
+
+```
+
+```{r}
+summary(rsi_data)
+boxplot(rsi_data$RSI)
+print(rsi_data)
+
+```
+
+```{r}
+sum(is.na(rsi_data))
+frequency(rsi_data)
+
+```
+
+```{r}
+
+ts(rsi_data$RSI,start = c(1988), freq=4) -> retail_rsi
+class(retail_rsi)
+retail_rsi %>% plot(ylab="RSI for all retailers",type='l')
+
+```
+
+```{r}
+plot(retail_rsi,ylab="RSI",main="RSI for All retail business except Fuel in the UK")
+abline(reg=lm(retail_rsi~time(retail_rsi))) # fit a trend line
+```
+```{r}
+cycle(retail_rsi)
+boxplot(retail_rsi~cycle(retail_rsi),main='RSI values in each quarter')
+```
+
+
+
+
+```{r}
+
+plot(decompose(retail_rsi, type="additive"))
+adf.test(retail_rsi, alternative="stationary", k=0)
+acf(retail_rsi)
+
+```
+
+```{r}
+retail_log <- log(retail_rsi)
+plot(retail_log, ylab='RSI:all retailers',type='l')
+acf(retail_log)
+adf.test(retail_log)
+kpss.test(retail_log)
+```
+
+
+```{r}
+diff_retail <- diff(retail_log,1)
+
+
+plot(diff_retail, ylab='Change in Log(retail_rsi)',type='l', main='RSI series after differencing')
+
+
+```
+
+
+```{r}
+acf(diff_retail)
+adf.test(diff_retail)
+kpss.test(diff_retail)
+```
+
+
+
+```{r}
+acf(diff_retail,lag=24)
+pacf(diff_retail,lag=24)
+eacf(diff_retail)
+```
+# MODEL SPECIFICATION
+
+
+
+
+```{r}
+MA1OP <- arima(log(retail_rsi), order = c(0,1,1), method = 'ML')
+MA1OP
+MA2OP <- arima(log(retail_rsi), order = c(0,1,2), method = 'ML')
+MA2OP
+AR1OP <- arima(log(retail_rsi), order = c(1,1,0), method = 'ML')
+AR1OP
+AR2OP <- arima(log(retail_rsi), order = c(2,1,0), method = 'ML')
+AR2OP
+ARMAOP1 <- arima(log(retail_rsi), order = c(1,1,1), method = 'ML')
+ARMAOP1
+
+BIC(MA1OP)
+
+BIC(MA2OP)
+BIC(AR1OP)
+BIC(AR2OP)
+BIC(ARMAOP1)
+
+```
+
+
+```{r}
+checkresiduals(ARMAOP1)
+```
+
+
+```{r}
+acf(as.vector(window(rstandard(ARMAOP1),start=c(1988,2))),lag.max=24)
+```
+```{r}
+Box.test(residuals(ARMAOP1))
+Box.test(residuals(ARMAOP1), lag=24, type=c("Ljung"))
+```
+
+
+```{r}
+adf.test(residuals(ARMAOP1))
+```
+
+```{r}
+#Normality of the residuals
+qqnorm(residuals(ARMAOP1)); qqline(residuals(ARMAOP1))
+
+```
+```{r}
+shapiro.test(rstandard(ARMAOP1))
+ks.test(rstandard(ARMAOP1),pnorm)
+```
+
+
+```{r}
+ma_over1<-arima(log(retail_rsi),order=c(1,1,2))
+ma_over1
+ma_over1<-arima(log(retail_rsi),order=c(2,1,0))
+ma_over1
+```
+
+
+```{r}
+#forecast and forecast limits of co2 model
+#future = forecast(AR1OP, h = 50)
+#plot(future)
+plot(ARMAOP1,n1=c(2017,1),n.ahead=8,type='o',xlab='Time', ylab='RSI',main='RSI with Forecasted values' )
+abline(h=coef(ARMAOP1)[names(coef(ARMAOP1))=='intercept'])
+#long term forecast for the co2 model
+#plot(m1.co2,n1=c(2004,1),n.ahead=48,xlab='Year',type='b', ylab='CO2 Levels')
+```
+```{r}
+#predict ARIMA
+futurVal <- predict(ARMAOP1,n.ahead = 24)
+#plot(futurVal)
+
+```
+
+
+```{r}
+#predict ARIMA
+#futurVal <- predict(m1.co2,n.ahead = 24)
+
+
+# train and test data
+trainrsi <- window(retail_log,end=c(2013,4))
+testrsi <- window(retail_log,start=c(2014,1))
+testrsi
+m1.trainrsi<-arima(trainrsi,order=c(1,1,1))
+m2.trainrsi<-arima(trainrsi,order=c(1,1,0))
+m3.trainrsi<-arima(trainrsi,order=c(0,1,1))
+m4.trainrsi<-arima(trainrsi,order=c(0,1,2))
+m5.trainrsi<-arima(trainrsi,order=c(2,1,0))
+
+# predict.Arima: Forecast from ARIMA fits
+futurm1 <- predict(m1.trainrsi,n.ahead = 24) 
+futurm1
+accuracy(futurm1$pred, testrsi)
+futurm2 <- predict(m2.trainrsi,n.ahead = 24) 
+futurm2
+accuracy(futurm2$pred, testrsi)
+futurm3 <- predict(m3.trainrsi,n.ahead = 24) 
+futurm3
+accuracy(futurm3$pred, testrsi)
+     
+
+futurm4 <- predict(m4.trainrsi,n.ahead = 24) 
+futurm4
+accuracy(futurm4$pred, testrsi)
+futurm5 <- predict(m5.trainrsi,n.ahead = 24) 
+futurm5
+accuracy(futurm5$pred, testrsi)
+```
+
+
+```{r}
+plot(window(retail_log,start=2010),type='l',xlab='Time', ylab='RSI',main='log(RSI) training Forecasted values vs test values' )
+lines(futurm1$pred,col='blue') 
+lines(futurm1$pred+2*futurm1$se,col='orange') 
+lines(futurm1$pred-2*futurm1$se,col='orange') 
+```
+
+
+SARIMA
+
+```{r}
+visitors_data <- read_csv("sarima.csv")
+head(visitors_data)
+```
+```{r}
+summary(visitors_data)
+boxplot(visitors_data$`No. of visits`)
+print(visitors_data)
+
+```
+```{r}
+sum(is.na(visitors_data))
+frequency(visitors_data)
+
+```
+
+```{r}
+ts(visitors_data$`No. of visits`,start = c(1980,1), freq=12) -> visitors_ts
+class(visitors_ts)
+plot(visitors_ts,ylab="No. of Visitors",main="No of Visitors to UK")
+abline(reg=lm(visitors_ts~time(visitors_ts))) # fit a trend line
+
+```
+```{r}
+cycle(visitors_ts)
+boxplot(visitors_ts~cycle(visitors_ts),main='No of Visitors to UK',xlab='Time', ylab='No. of Visitors')
+
+```
+
+
+```{r}
+plot(decompose(visitors_ts, type="additive"))
+```
+
+
+```{r}
+plot(window(visitors_ts,start=c(2015,1)),ylab='No. of Visitors',main="No of Visitors to UK")
+month=c('J','F','M','A','M','J','J','A','S','O','N','D')
+points(window(visitors_ts,start=c(2015,1)),pch=month)
+```
+
+
+```{r}
+acf(as.vector(visitors_ts),lag.max = 48)
+
+```
+
+
+```{r}
+plot(diff(visitors_ts),main='First difference of no. of visitors')
+```
+
+
+```{r}
+acf(as.vector(diff(visitors_ts)),lag.max = 36)
+```
+
+
+```{r}
+plot(diff(diff(visitors_ts),lag=12),xlab='Time',ylab='diff(diff(visitors_ts)', main='First and seasonal difference of no. of visitors')
+```
+
+
+```{r}
+acf(as.vector(diff(diff(visitors_ts),lag=12)),lag.max = 36,ci.type='ma')
+```
+
+
+```{r}
+adf.test(diff(diff(visitors_ts)))
+pacf(as.vector(diff(diff(visitors_ts),lag=12)),lag.max = 36)
+eacf(diff(diff(visitors_ts)))
+```
+
+
+
+```{r}
+ma1<-arima(visitors_ts,order=c(0,1,1),seasonal = list(order=c(0,1,1),period=12))
+ma1
+BIC(ma1)
+ar1<-arima(visitors_ts,order=c(3,1,0),seasonal = list(order=c(1,1,0),period=12))
+ar1
+BIC(ar1)
+ar2<-arima(visitors_ts,order=c(4,1,0),seasonal = list(order=c(1,1,0),period=12))
+ar2
+BIC(ar2)
+arima1<-arima(visitors_ts,order=c(3,1,1),seasonal = list(order=c(1,1,1),period=12))
+arima1
+BIC(arima1)
+arima2<-arima(visitors_ts,order=c(4,1,1),seasonal = list(order=c(1,1,1),period=12))
+arima2
+BIC(arima2)
+```
+
+
+
+
+```{r}
+checkresiduals(ma1)
+#acf(as.vector(window(rstandard(ma1),start=c(1962,2))),lag.max=36)
+```
+```{r}
+Box.test(residuals(ma1))
+Box.test(residuals(ma1), lag=12, type=c("Ljung"))
+```
+
+
+```{r}
+adf.test(residuals(ma1))
+```
+
+```{r}
+#Normality of the residuals
+qqnorm(residuals(ma1)); qqline(residuals(ma1))
+#qqnorm(window(rstandard(ma1),start=c(1962,2)))
+#qqline(window(rstandard(ma1),start=c(1962,2)))
+```
+```{r}
+shapiro.test(rstandard(ma1))
+ks.test(rstandard(ma1),pnorm)
+```
+
+
+```{r}
+ma_over<-arima(visitors_ts,order=c(1,1,1),seasonal = list(order=c(0,1,1),period=12))
+ma_over
+```
+
+
+
+
+
+
+```{r}
+futurVal <- predict(ma1,n.ahead = 24)
+```
+
+
+```{r}
+train_visitors <- window(visitors_ts,end=c(2012,12))
+test_visitors <- window(visitors_ts,start=c(2013,1))
+test_visitors
+m1.train_visitors<-arima(train_visitors,order=c(0,1,1),seasonal=list(order=c(0,1,1), period=12))
+m2.train_visitors<-arima(train_visitors,order=c(3,1,0),seasonal=list(order=c(1,1,0), period=12))
+m3.train_visitors<-arima(train_visitors,order=c(4,1,0),seasonal=list(order=c(1,1,0), period=12))
+m4.train_visitors<-arima(train_visitors,order=c(3,1,1),seasonal=list(order=c(1,1,0), period=12))
+m5.train_visitors<-arima(train_visitors,order=c(4,1,1),seasonal=list(order=c(1,1,1), period=12))
+```
+
+
+```{r}
+futurm1 <- predict(m1.train_visitors,n.ahead = 96) 
+accuracy(futurm1$pred, test_visitors)
+futurm2 <- predict(m2.train_visitors,n.ahead = 96) 
+accuracy(futurm2$pred, test_visitors)
+futurm3 <- predict(m3.train_visitors,n.ahead = 96) 
+accuracy(futurm3$pred, test_visitors)
+futurm4 <- predict(m4.train_visitors,n.ahead = 96) 
+accuracy(futurm4$pred, test_visitors)
+futurm5 <- predict(m5.train_visitors,n.ahead = 96) 
+accuracy(futurm5$pred, test_visitors)
+futurm5
+```
+
+
+```{r}
+plot(ma1,n1=c(2018,1),n.ahead=24,xlab='Year',type='o', ylab='no. of visitors', main='Number of visitors forecasting')
+predict_visits<-predict(arima2,n1=c(2018,1),n.ahead=24)
+plot(arima2,n1=c(2018,1),n.ahead=24,xlab='Year',type='o', ylab='no. of visitors', main='Number of visitors forecasting')
+predict_visits$pred
+```
